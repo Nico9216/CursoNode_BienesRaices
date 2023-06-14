@@ -4,12 +4,23 @@ import usuarioRoutes from './routes/usuarioRoutes.js'
 //Crear la app/servidor
 const app=express(); //Otros le llaman servidor 
 
+
+//Habilitar Pug
+app.set('view engine','pug')
+app.set('views','./views')
+
+//Carpeta Pública
+app.use(express.static('public')) //Establezco la ruta donde estara la parte publica, es decir la que podrá acceder 
+//el usuario que visita el sitio web, ejemplo imagenes, css,archivos etc.
+
 //Routing
-app.use('/',usuarioRoutes); //.use() busca todas las rutas que inicien con / 
+app.use('/auth',usuarioRoutes); //.use() busca todas las rutas que inicien con / 
                             //.get() busca la ruta en exacta
 
 //Si utilizaría app.get(‘/’) solo podría acceder al get(‘/’) mientras que con app.use()
 // puedo acceder al ‘/’ y al ‘nosotros’ de usuarioRoutes
+
+
 
 //Definir un puerto y arrancar el proyecto
 const port=3000;
