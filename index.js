@@ -1,9 +1,21 @@
 import express from 'express';
 import usuarioRoutes from './routes/usuarioRoutes.js'
+import db from './config/db.js'
 
 //Crear la app/servidor
 const app=express(); //Otros le llaman servidor 
 
+//Habilitar lectura de datos de formularios (recibir requests)
+app.use(express.urlencoded({extended:true})) 
+
+//Conexión a la base de datos
+try {
+    await db.authenticate();
+    db.sync();//Crea las tablas(las de model) en caso de no existir
+    console.log('Conexión correcta a la base de datos')
+} catch (error) {
+    console.log(error)
+}
 
 //Habilitar Pug
 app.set('view engine','pug')

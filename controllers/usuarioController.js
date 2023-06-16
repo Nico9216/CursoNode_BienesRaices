@@ -1,3 +1,5 @@
+import Usuario from '../models/Usuario.js'
+
 const formularioLogin=(req,res)=>{
     res.render('auth/login',{
         pagina:'Iniciar Sesión'
@@ -16,8 +18,14 @@ const formularioOlvidePassword=(req,res)=>{
     })
 }
 
+const registrar= async (req,res)=>{
+    const usuario=await Usuario.create(req.body)
+    res.json(usuario)
+}
+
 export{
     formularioLogin,
     formularioRegistro,
-    formularioOlvidePassword
+    formularioOlvidePassword,
+    registrar
 }
