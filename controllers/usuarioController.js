@@ -1,6 +1,7 @@
 import {check,validationResult} from 'express-validator'
 import Usuario from '../models/Usuario.js'
 import {generarId} from '../helpers/tokens.js'
+import {emailRegistro} from '../helpers/emails.js'
 
 const formularioLogin=(req,res)=>{
     res.render('auth/login',{
@@ -10,7 +11,8 @@ const formularioLogin=(req,res)=>{
 
 const formularioRegistro=(req,res)=>{
     res.render('auth/registro',{
-        pagina:'Crear cuenta'
+        pagina:'Crear cuenta',
+        csrfToken:req.csrfToken()
     })
 }
 
@@ -35,6 +37,7 @@ const registrar= async (req,res)=>{
     if(!resultado.isEmpty()){
         return res.render('auth/registro',{ //Recordar 'pagina', 'errores' son propiedades que yo creo y pueden variar el nombre
             pagina:'Recupera tu acceso a Bienes Raices',
+            csrfToken:req.csrfToken(),
             errores:resultado.array(), //Errores es una propiedad que accede registro.pug para mostrar los errores
             usuario:{
                 nombre:req.body.nombre,
@@ -51,6 +54,7 @@ const registrar= async (req,res)=>{
     if(existeUsuario){
         return res.render('auth/registro',{ 
             pagina:'Recupera tu acceso a Bienes Raices',
+            csrfToken:req.csrfToken(),
             errores:[{msg:'El usuario ya está registrado'}],
             usuario:{
                 nombre:req.body.nombre,
@@ -60,12 +64,19 @@ const registrar= async (req,res)=>{
     }
 
     //Almacenar usuario
-    await Usuario.create({
+    const usuario =await Usuario.create({
         nombre,
         email,
         password,
         token:generarId()}
     )
+    
+    //Envia Email de confirmación
+    emailRegistro({
+        nombre:usuario.nombre,
+        email: usuario.email,
+        token: usuario.token
+    })
 
     //Mostrar mensaje de confirmación
     res.render('templates/mensaje',{
@@ -75,9 +86,38 @@ const registrar= async (req,res)=>{
     
 }
 
+//Función que comprueba una cuenta
+const confirmar=async (req,res,next)=>{
+    const {token}=req.params //Al ser ruta dinámica lo obtenfo de req.params y no .body.
+
+    //Verificar si el token es válido
+    const usuario= await Usuario.findOne({where:{token}})
+    
+    if(!usuario){
+        return res.render('auth/confirmar-cuenta',{
+            pagina:'Error al confirmar tu cuenta' ,
+            mensaje:'Hubo un error al confirmar tu cuneta, intenta de nuevo',
+            error:true
+        })
+    }
+
+    //Confirmar la cuenta
+    usuario.token=null;
+    usuario.confirmado=true;
+    await usuario.save();
+
+    res.render('auth/confirmar-cuenta',{
+        pagina:'Cuenta Confirmada' ,
+        mensaje:'La cuenta se confirmo correctamente',
+    })
+
+    //next();//En ves de quedarse cargando a la espera de una respuesta, va al siguiente middware
+}
+
 export{
     formularioLogin,
     formularioRegistro,
     formularioOlvidePassword,
-    registrar
+    registrar,
+    confirmar
 }
