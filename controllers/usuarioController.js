@@ -1,7 +1,8 @@
 import {check,validationResult} from 'express-validator'
 import Usuario from '../models/Usuario.js'
 import {generarId} from '../helpers/tokens.js'
-import {emailRegistro} from '../helpers/emails.js'
+import {emailRegistro,emailOlvidePasword} from '../helpers/emails.js'
+import bcrypt from 'bcrypt'
 
 const formularioLogin=(req,res)=>{
     res.render('auth/login',{
@@ -18,8 +19,55 @@ const formularioRegistro=(req,res)=>{
 
 const formularioOlvidePassword=(req,res)=>{
     res.render('auth/olvide-password',{
-        pagina:'Recupera tu acceso a Bienes Raices'
+        pagina:'Recupera tu acceso a Bienes Raices',
+        csrfToken:req.csrfToken()
     })
+}
+
+const resetPassword= async(req,res)=>{
+    //Validación
+    await check('email').isEmail().withMessage('Formato de email no válido').run(req)
+
+
+    let resultado=validationResult(req) //revisa las reglas definidas anteriormente y devolverá un arreglo con los errores en caso de existir
+
+    //Verificar que el resultado es vacío
+    if(!resultado.isEmpty()){
+        return res.render('auth/olvide-password',{ 
+            pagina:'Recupera tu acceso a Bienes Raices',
+            csrfToken:req.csrfToken(),
+            errores:resultado.array()
+        })
+    }
+
+    //Buscar el usuario
+    const {email}=req.body
+    const usuario = await Usuario.findOne({where:{email}})
+    
+    if(!usuario){
+        return res.render('auth/olvide-password',{ 
+            pagina:'Recupera tu acceso a Bienes Raices',
+            csrfToken:req.csrfToken(),
+            errores:[{msg:'El email no pertenece a ningún usuario'}]
+        })
+    }
+
+    //Generar un token y enviar email
+    usuario.token=generarId();
+    await usuario.save();
+
+    //Enviar un mail
+    emailOlvidePasword({
+        email:usuario.email,
+        nombre:usuario.nombre,
+        token:usuario.token
+    })
+    //Renderizar un mensaje
+    res.render('templates/mensaje',{
+        pagina:'Restablece tu Password' ,
+        mensaje:'Hemos enviado un Email con las instrucciones'
+     })
+
 }
 
 const registrar= async (req,res)=>{
@@ -114,10 +162,71 @@ const confirmar=async (req,res,next)=>{
     //next();//En ves de quedarse cargando a la espera de una respuesta, va al siguiente middware
 }
 
+const comprobarToken= async (req,res) =>{
+
+    const {token}=req.params;
+
+    const usuario= await Usuario.findOne({where:{token}})
+
+    if(!usuario){
+        return res.render('auth/confirmar-cuenta',{
+            pagina:'Restablece tu Password' ,
+            mensaje:'Hubo un error al validar tu información, intenta de nuevo',
+            error:true
+        })
+    }
+
+    //Mostrar formulario para modificar el pasword
+    res.render('auth/reset-password',{
+        pagina:'Restablece tu Password',
+        csrfToken:req.csrfToken(),
+    })
+}
+
+const nuevoPassword= async (req,res) =>{
+    //Validar el password
+    await check('password').isLength({min:6}).withMessage('El password debe tener al menos 6 caracteres').run(req)
+
+    let resultado=validationResult(req) //revisa las reglas definidas anteriormente y devolverá un arreglo con los errores en caso de existir
+
+    //Verificar que el resultado es vacío
+    if(!resultado.isEmpty()){
+        return res.render('auth/reset-password',{ //Recordar 'pagina', 'errores' son propiedades que yo creo y pueden variar el nombre
+            pagina:'Reestablece tu password',
+            csrfToken:req.csrfToken(),
+            errores:resultado.array(), //Errores es una propiedad que accede registro.pug para mostrar los errores
+        })
+    }
+    
+    const {token}=req.params; // La obtengo de .Routes :token 
+    const{password}=req.body;
+
+    //Identificar quien hace el cambio
+    const usuario = await Usuario.findOne({where:{token}})
+
+
+    //Hashear el nuevo password
+    const salt =await bcrypt.genSalt(10)
+    usuario.password=await bcrypt.hash(password,salt);
+    usuario.token=null;
+
+    await usuario.save();
+
+    res.render('auth/confirmar-cuenta',{
+        pagina:'Password Reestablecido',
+        mensaje: 'El Password se guardó correctamente'
+    })
+
+}
+
+
 export{
     formularioLogin,
     formularioRegistro,
     formularioOlvidePassword,
+    resetPassword,
     registrar,
-    confirmar
+    confirmar,
+    comprobarToken,
+    nuevoPassword
 }
